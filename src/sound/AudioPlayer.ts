@@ -150,7 +150,7 @@ export class AudioPlayer extends Script {
   }
 
   static isSupported() {
-    return !!('AudioContext' in window || 'webkitAudioContext' in window);
+    return !!('AudioContext' in window);
   }
 
   dispose() {
