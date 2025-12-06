@@ -70,7 +70,6 @@ export class TextButton extends TextView {
       radius = SquircleShader.uniforms.uRadius.value,
       boxSize = SquircleShader.uniforms.uBoxSize.value,
     } = options;
-    console.log(colorVec4);
 
     const uniforms = {
       ...SquircleShader.uniforms,
