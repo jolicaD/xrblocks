@@ -64,6 +64,7 @@ function computeOpenPalm(context: HandContext, config: GestureConfiguration) {
   if (!fingerMetrics.length) return undefined;
   const handScale = estimateHandScale(context);
   const palmWidth = getPalmWidth(context) ?? handScale * 0.85;
+  const palmUp = getPalmUp(context);
 
   const extensionScores = fingerMetrics.map(({tipDistance}) =>
     clamp01((tipDistance - handScale * 0.5) / (handScale * 0.45))
@@ -71,6 +72,14 @@ function computeOpenPalm(context: HandContext, config: GestureConfiguration) {
   const straightnessScores = fingerMetrics.map(({curlRatio}) =>
     clamp01((curlRatio - 1.1) / 0.5)
   );
+  const orientationScore =
+    palmUp && fingerMetrics.length
+      ? average(
+          fingerMetrics.map((metrics) =>
+            fingerAlignmentScore(context, metrics, palmUp)
+          )
+        )
+      : 0.5;
 
   const neighbors = getAdjacentFingerDistances(context);
   const spreadScore =
@@ -81,7 +90,10 @@ function computeOpenPalm(context: HandContext, config: GestureConfiguration) {
   const extensionScore = average(extensionScores);
   const straightScore = average(straightnessScores);
   const confidence = clamp01(
-    extensionScore * 0.5 + straightScore * 0.3 + spreadScore * 0.2
+    extensionScore * 0.4 +
+      straightScore * 0.25 +
+      spreadScore * 0.2 +
+      orientationScore * 0.15
   );
 
   return {
@@ -90,6 +102,7 @@ function computeOpenPalm(context: HandContext, config: GestureConfiguration) {
       extensionScore,
       straightScore,
       spreadScore,
+      orientationScore,
       threshold: config.threshold,
     },
   };
@@ -188,8 +201,8 @@ function computeThumbsUp(context: HandContext, config: GestureConfiguration) {
   }
 
   const confidence = clamp01(
-    thumbExtendedScore * 0.35 +
-      curledScore * 0.3 +
+    thumbExtendedScore * 0.3 +
+      curledScore * 0.35 +
       orientationScore * 0.2 +
       separationScore * 0.15
   );
@@ -215,16 +228,34 @@ function computePoint(context: HandContext, config: GestureConfiguration) {
   if (!otherMetrics.length) return undefined;
 
   const handScale = estimateHandScale(context);
+  const palmWidth = getPalmWidth(context) ?? handScale * 0.85;
+  const palmUp = getPalmUp(context);
   const indexCurlScore = clamp01((indexMetrics.curlRatio - 1.2) / 0.35);
   const indexReachScore = clamp01(
     (indexMetrics.tipDistance - handScale * 0.6) / (handScale * 0.25)
   );
+  const indexDirectionScore =
+    palmUp && indexMetrics
+      ? fingerAlignmentScore(context, indexMetrics, palmUp)
+      : 0.4;
 
   const othersCurl = average(otherMetrics.map((metrics) => metrics.curlRatio));
   const othersCurledScore = clamp01((1.05 - othersCurl) / 0.25);
+  const thumbTip = getJoint(context, 'thumb-tip');
+  const thumbTuckedScore =
+    thumbTip && indexMetrics.metacarpal && palmWidth > EPSILON
+      ? clamp01(
+          (palmWidth * 0.75 - thumbTip.distanceTo(indexMetrics.metacarpal)) /
+            (palmWidth * 0.4)
+        )
+      : 0.5;
 
   const confidence = clamp01(
-    indexCurlScore * 0.45 + indexReachScore * 0.25 + othersCurledScore * 0.3
+    indexCurlScore * 0.35 +
+      indexReachScore * 0.25 +
+      othersCurledScore * 0.2 +
+      indexDirectionScore * 0.1 +
+      thumbTuckedScore * 0.1
   );
 
   return {
@@ -233,6 +264,8 @@ function computePoint(context: HandContext, config: GestureConfiguration) {
       indexCurlScore,
       indexReachScore,
       othersCurledScore,
+      indexDirectionScore,
+      thumbTuckedScore,
       threshold: config.threshold,
     },
   };
@@ -245,6 +278,7 @@ function computeSpread(context: HandContext, config: GestureConfiguration) {
   const handScale = estimateHandScale(context);
   const palmWidth = getPalmWidth(context) ?? handScale * 0.85;
   const neighbors = getAdjacentFingerDistances(context);
+  const palmUp = getPalmUp(context);
 
   const spreadScore =
     neighbors.average !== Infinity && palmWidth > EPSILON
@@ -253,14 +287,25 @@ function computeSpread(context: HandContext, config: GestureConfiguration) {
   const extensionScore = clamp01(
     (average(fingerMetrics.map((metrics) => metrics.curlRatio)) - 1.15) / 0.45
   );
+  const orientationScore =
+    palmUp && fingerMetrics.length
+      ? average(
+          fingerMetrics.map((metrics) =>
+            fingerAlignmentScore(context, metrics, palmUp)
+          )
+        )
+      : 0.5;
 
-  const confidence = clamp01(spreadScore * 0.6 + extensionScore * 0.4);
+  const confidence = clamp01(
+    spreadScore * 0.55 + extensionScore * 0.3 + orientationScore * 0.15
+  );
 
   return {
     confidence,
     data: {
       spreadScore,
       extensionScore,
+      orientationScore,
       threshold: config.threshold,
     },
   };
@@ -416,6 +461,19 @@ function getFingerJoint(
 ) {
   const prefix = FINGER_PREFIX[finger];
   return getJoint(context, `${prefix}-${suffix}`);
+}
+
+function fingerAlignmentScore(
+  context: HandContext,
+  metrics: FingerMetrics,
+  palmUp: THREE.Vector3
+) {
+  const base = metrics.metacarpal ?? getJoint(context, 'wrist');
+  if (!base) return 0;
+  const direction = new THREE.Vector3().subVectors(metrics.tip, base);
+  if (direction.lengthSq() === 0) return 0;
+  direction.normalize();
+  return clamp01((direction.dot(palmUp) - 0.35) / 0.5);
 }
 
 function clamp01(value: number) {
