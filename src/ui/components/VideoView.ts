@@ -70,7 +70,7 @@ export class VideoView extends View {
     this.playsInline = options.playsInline ?? this.playsInline;
     if (options.crossOrigin) this.crossOrigin = options.crossOrigin;
     if (options.mode) this.mode = options.mode;
-    
+
     const videoGeometry = new THREE.PlaneGeometry(1, 1);
     const videoMaterial = new THREE.MeshBasicMaterial({
       transparent: true,
