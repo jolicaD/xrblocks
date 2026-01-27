@@ -117,6 +117,8 @@ export class Options {
    * Configuration for the XR session button.
    */
   xrButton = {
+    appTitle: '',
+    appDescription: '',
     enabled: true,
     startText: 'Enter XR',
     endText: 'Exit XR',
@@ -125,6 +127,15 @@ export class Options {
     showEnterSimulatorButton: false,
     // Whether to autostart the simulator even if WebXR is available.
     alwaysAutostartSimulator: false,
+  };
+
+  /**
+   * Which permissions to request before entering the XR session.
+   */
+  permissions = {
+    geolocation: false,
+    camera: false,
+    microphone: false,
   };
 
   /**
@@ -178,6 +189,7 @@ export class Options {
    * @returns The instance for chaining.
    */
   enableObjectDetection() {
+    this.permissions.camera = true;
     this.world.enableObjectDetection();
     return this;
   }
@@ -189,6 +201,7 @@ export class Options {
    * @returns The instance for chaining.
    */
   enableCamera(facingMode: 'environment' | 'user' = 'environment') {
+    this.permissions.camera = true;
     this.deviceCamera = new DeviceCameraOptions(
       facingMode === 'environment'
         ? xrDeviceCameraEnvironmentOptions
@@ -226,15 +239,6 @@ export class Options {
   }
 
   /**
-   * Enables the Gemini Live feature.
-   * @returns The instance for chaining.
-   */
-  enableGeminiLive() {
-    this.simulator.geminilive = true;
-    return this;
-  }
-
-  /**
    * Enables a standard set of AI features, including Gemini Live.
    * @returns The instance for chaining.
    */
@@ -251,6 +255,26 @@ export class Options {
    */
   enableXRTransitions() {
     this.transition.enabled = true;
+    return this;
+  }
+
+  /**
+   * Sets the title of the app to be displayed above the XR button.
+   * @param title - The title of the app.
+   * @returns The instance for chaining.
+   */
+  setAppTitle(title: string) {
+    this.xrButton.appTitle = title;
+    return this;
+  }
+
+  /**
+   * Sets the description of the app to be displayed above the XR button.
+   * @param description - The description of the app.
+   * @returns The instance for chaining.
+   */
+  setAppDescription(description: string) {
+    this.xrButton.appDescription = description;
     return this;
   }
 }

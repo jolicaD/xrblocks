@@ -1,22 +1,18 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <title>UI Panels Showcase</title>
+    <title>UI Panels Showcase | XR Blocks</title>
     <meta charset="utf-8" />
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, user-scalable=no"
     />
-    <link
-      type="text/css"
-      rel="stylesheet"
-      href="https://xr-labs.web.app/site/css/main.css"
-    />
+    <link type="text/css" rel="stylesheet" href="../../samples/main.css" />
     <script type="importmap">
       {
         "imports": {
-          "three": "https://cdn.jsdelivr.net/npm/three@0.181.0/build/three.module.js",
-          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.181.0/examples/jsm/",
+          "three": "https://cdn.jsdelivr.net/npm/three@0.182.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.182.0/examples/jsm/",
           "troika-three-text": "https://cdn.jsdelivr.net/gh/protectwise/troika@028b81cf308f0f22e5aa8e78196be56ec1997af5/packages/troika-three-text/src/index.js",
           "troika-three-utils": "https://cdn.jsdelivr.net/gh/protectwise/troika@v0.52.4/packages/troika-three-utils/src/index.js",
           "troika-worker-utils": "https://cdn.jsdelivr.net/gh/protectwise/troika@v0.52.4/packages/troika-worker-utils/src/index.js",
@@ -79,11 +75,11 @@
             type: 'Panel',
             options: {
               name: 'JSON Panel',
-              width: 0.8,
-              height: 1.0,
+              width: 1.0,
+              height: 1.2,
               backgroundColor: '#282c3488',
             },
-            position: {x: 1.0, y: 1.5, z: -1.5},
+            position: {x: 1.5, y: 1.5, z: -2.0},
             rotation: {x: 0, y: -45, z: 0},
             children: [
               {
@@ -175,38 +171,57 @@
 
         createPlayerPanel() {
           // Panel 2: Interactive Media Player (Top-Center)
-          const playerPanel = new xb.SpatialPanel({
-            width: 1.2,
-            height: 1.0,
-            backgroundColor: '#21252baa',
+          const panel = new xb.SpatialPanel({
+            width: 1.3,
+            height: 1.25,
+            backgroundColor: '#00000000',
           });
-          playerPanel.position.set(
+          panel.position.set(
             0,
             xb.user.height * 2.0,
             -xb.user.panelDistance - 1.0
           );
-          this.add(playerPanel);
-
-          const playerGrid = playerPanel.addGrid();
-          const videoRow = playerGrid.addRow({weight: 0.6});
-          videoRow.addVideo({
-            src: 'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+          panel.isRoot = true;
+          this.add(panel);
+          const grid = panel.addGrid();
+          // Space for orbiter
+          grid.addRow({weight: 0.0});
+          // player row
+          const playerRow = grid.addRow({weight: 1.0});
+          const playerPanel = playerRow.addPanel({
+            width: 1.2,
+            height: 1.2,
+            backgroundColor: '#21252baa',
           });
-
-          const progressRow = playerGrid.addRow({weight: 0.1});
-
-          const controlsRow = playerGrid.addRow({weight: 0.3});
-          controlsRow.addCol({weight: 0.2});
-          controlsRow
-            .addCol({weight: 0.2})
-            .addIconButton({text: 'skip_previous', fontSize: 0.6});
-          controlsRow
-            .addCol({weight: 0.2})
-            .addIconButton({text: 'play_arrow', fontSize: 0.8});
-          controlsRow
-            .addCol({weight: 0.2})
-            .addIconButton({text: 'skip_next', fontSize: 0.6});
-          controlsRow.addCol({weight: 0.2});
+          const playerGrid = playerPanel.addGrid();
+          {
+            // video row
+            playerGrid.addRow({weight: 0.1});
+            const videoRow = playerGrid.addRow({weight: 0.5});
+            videoRow.addVideo({
+              src: 'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+            });
+            // progress row
+            const progressRow = playerGrid.addRow({weight: 0.05});
+            // controls row
+            const controlsRow = playerGrid.addRow({weight: 0.35});
+            controlsRow.addCol({weight: 0.2});
+            controlsRow
+              .addCol({weight: 0.2})
+              .addIconButton({text: 'skip_previous', fontSize: 0.4});
+            controlsRow
+              .addCol({weight: 0.2})
+              .addIconButton({text: 'play_arrow', fontSize: 0.6});
+            controlsRow
+              .addCol({weight: 0.2})
+              .addIconButton({text: 'skip_next', fontSize: 0.4});
+            controlsRow.addCol({weight: 0.2});
+          }
+          const orbiter = playerGrid.addOrbiter({
+            orbiterScale: 0.1,
+          });
+          orbiter.addExitButton();
+          panel.updateLayouts();
         }
 
         createSettingsPanel() {
@@ -435,13 +450,24 @@
 
           const canvasTexture = new THREE.CanvasTexture(canvas);
           canvasTexture.needsUpdate = true;
-
-          const chartArea = chartGrid.addRow({weight: 0.85});
+          const chartCol = chartGrid.addCol();
+          chartCol.addRow({weight: 0.15});
+          const chartArea = chartCol.addRow({weight: 0.85});
           const chartMesh = new THREE.Mesh(
             new THREE.PlaneGeometry(1, 1),
             new THREE.MeshBasicMaterial({map: canvasTexture})
           );
           chartArea.add(chartMesh);
+
+          const tmpRow = chartGrid.addCol();
+          tmpRow.addRow({weight: 0.3});
+          const okButton = tmpRow.addRow().addTextButton({
+            text: 'OK',
+            backgroundColor: '#22aa33',
+            opacity: 0.5,
+            fontColor: '#66ccff',
+            fontSizeDp: 50,
+          });
         }
 
         init() {
@@ -459,6 +485,7 @@
       document.addEventListener('DOMContentLoaded', function () {
         const options = new xb.Options();
         options.enableUI();
+        options.setAppTitle('Spatial UI');
         xb.add(new MainScript());
         xb.init(options);
       });

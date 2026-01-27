@@ -21,10 +21,8 @@ export class Depth {
   // The main camera.
   private camera!: THREE.Camera;
   private renderer!: THREE.WebGLRenderer;
-  private scene!: THREE.Scene;
-  private projectionMatrixInverse = new THREE.Matrix4();
-  private xrRefSpace?: XRReferenceSpace | XRBoundedReferenceSpace;
 
+  enabled = false;
   view: XRView[] = [];
   cpuDepthData: XRCPUDepthInformation[] = [];
   gpuDepthData: XRWebGLDepthInformation[] = [];
@@ -34,13 +32,27 @@ export class Depth {
   options = new DepthOptions();
   width = DEFAULT_DEPTH_WIDTH;
   height = DEFAULT_DEPTH_HEIGHT;
-  rawValueToMeters = 0.0010000000474974513;
+  get rawValueToMeters() {
+    if (this.cpuDepthData.length) {
+      return this.cpuDepthData[0].rawValueToMeters;
+    } else if (this.gpuDepthData.length) {
+      return this.gpuDepthData[0].rawValueToMeters;
+    }
+    return 0;
+  }
   occludableShaders = new Set<Shader>();
   private occlusionPass?: OcclusionPass;
 
   // Whether we're counting the number of depth clients.
   private depthClientsInitialized = false;
   private depthClients = new Set<object>();
+
+  depthProjectionMatrices: THREE.Matrix4[] = [];
+  depthProjectionInverseMatrices: THREE.Matrix4[] = [];
+  depthViewMatrices: THREE.Matrix4[] = [];
+  depthViewProjectionMatrices: THREE.Matrix4[] = [];
+  depthCameraPositions: THREE.Vector3[] = [];
+  depthCameraRotations: THREE.Quaternion[] = [];
 
   /**
    * Depth is a lightweight manager based on three.js to simply prototyping
@@ -66,7 +78,7 @@ export class Depth {
     this.camera = camera;
     this.options = options;
     this.renderer = renderer;
-    this.scene = scene;
+    this.enabled = options.enabled;
 
     if (this.options.depthTexture.enabled) {
       this.depthTextures = new DepthTextures(options);
@@ -85,8 +97,7 @@ export class Depth {
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFShadowMap;
       }
-      camera.add(this.depthMesh);
-      scene.add(camera);
+      scene.add(this.depthMesh);
     }
 
     if (this.options.occlusion.enabled) {
@@ -111,24 +122,24 @@ export class Depth {
   }
 
   /**
-   * Projects the given world position to clip space and then to view
-   * space using the depth.
+   * Projects the given world position to depth camera's clip space and then
+   * to the depth camera's view space using the depth.
    * @param position - The world position to project.
+   * @returns The depth camera view space position.
    */
   getProjectedDepthViewPositionFromWorldPosition(
     position: THREE.Vector3,
     target = new THREE.Vector3()
   ) {
-    const camera = this.renderer.xr?.getCamera?.()?.cameras?.[0] || this.camera;
     clipSpacePosition
       .copy(position)
-      .applyMatrix4(camera.matrixWorldInverse)
-      .applyMatrix4(camera.projectionMatrix);
+      .applyMatrix4(this.depthViewMatrices[0])
+      .applyMatrix4(this.depthProjectionMatrices[0]);
     const u = 0.5 * (clipSpacePosition.x + 1.0);
     const v = 0.5 * (clipSpacePosition.y + 1.0);
     const depth = this.getDepth(u, v);
     target.set(2.0 * (u - 0.5), 2.0 * (v - 0.5), -1);
-    target.applyMatrix4(camera.projectionMatrixInverse);
+    target.applyMatrix4(this.depthProjectionInverseMatrices[0]);
     target.multiplyScalar((target.z - depth) / target.z);
     return target;
   }
@@ -153,29 +164,70 @@ export class Depth {
       2.0 * (v - 0.5),
       -1
     );
-    vertexPosition.applyMatrix4(this.projectionMatrixInverse);
+    vertexPosition.applyMatrix4(this.depthProjectionInverseMatrices[0]);
     vertexPosition.multiplyScalar(-depth / vertexPosition.z);
     return vertexPosition;
   }
 
-  updateCPUDepthData(depthData: XRCPUDepthInformation, view_id = 0) {
-    this.cpuDepthData[view_id] = depthData;
-    // Workaround for b/382679381.
-    this.rawValueToMeters = depthData.rawValueToMeters;
-    if (this.options.useFloat32) {
-      this.rawValueToMeters = 1.0;
+  private updateDepthMatrices(depthData: XRDepthInformation, viewId: number) {
+    // Populate depth view and projection matrices.
+    while (viewId >= this.depthViewMatrices.length) {
+      this.depthViewMatrices.push(new THREE.Matrix4());
+      this.depthViewProjectionMatrices.push(new THREE.Matrix4());
+      this.depthProjectionMatrices.push(new THREE.Matrix4());
+      this.depthProjectionInverseMatrices.push(new THREE.Matrix4());
+      this.depthCameraPositions.push(new THREE.Vector3());
+      this.depthCameraRotations.push(new THREE.Quaternion());
     }
+    if (depthData.projectionMatrix && depthData.transform) {
+      this.depthProjectionMatrices[viewId].fromArray(
+        depthData.projectionMatrix
+      );
+      this.depthViewMatrices[viewId].fromArray(
+        depthData.transform.inverse.matrix
+      );
+      this.depthCameraPositions[viewId].set(
+        depthData.transform.position.x,
+        depthData.transform.position.y,
+        depthData.transform.position.z
+      );
+      this.depthCameraRotations[viewId].set(
+        depthData.transform.orientation.x,
+        depthData.transform.orientation.y,
+        depthData.transform.orientation.z,
+        depthData.transform.orientation.w
+      );
+    } else {
+      const camera =
+        this.renderer.xr?.getCamera()?.cameras?.[viewId] ?? this.camera;
+      this.depthProjectionMatrices[viewId].copy(camera.projectionMatrix);
+      this.depthViewMatrices[viewId].copy(camera.matrixWorldInverse);
+      this.depthCameraPositions[viewId].copy(camera.position);
+      this.depthCameraRotations[viewId].copy(camera.quaternion);
+    }
+    this.depthProjectionInverseMatrices[viewId]
+      .copy(this.depthProjectionMatrices[viewId])
+      .invert();
+    this.depthViewProjectionMatrices[viewId].multiplyMatrices(
+      this.depthProjectionMatrices[viewId],
+      this.depthViewMatrices[viewId]
+    );
+  }
+
+  updateCPUDepthData(depthData: XRCPUDepthInformation, viewId = 0) {
+    this.cpuDepthData[viewId] = depthData;
+    this.updateDepthMatrices(depthData, viewId);
 
     // Updates Depth Array.
-    if (this.depthArray[view_id] == null) {
-      this.depthArray[view_id] = this.options.useFloat32
+    if (this.depthArray[viewId] == null) {
+      this.depthArray[viewId] = this.options.useFloat32
         ? new Float32Array(depthData.data)
         : new Uint16Array(depthData.data);
       this.width = depthData.width;
       this.height = depthData.height;
     } else {
       // Copies the data from an ArrayBuffer to the existing TypedArray.
-      this.depthArray[view_id].set(
+      this.depthArray[viewId].set(
         this.options.useFloat32
           ? new Float32Array(depthData.data)
           : new Uint16Array(depthData.data)
@@ -184,21 +236,22 @@ export class Depth {
 
     // Updates Depth Texture.
     if (this.options.depthTexture.enabled && this.depthTextures) {
-      this.depthTextures.updateData(depthData, view_id);
+      this.depthTextures.updateData(depthData, viewId);
     }
 
-    if (this.options.depthMesh.enabled && this.depthMesh && view_id == 0) {
-      this.depthMesh.updateDepth(depthData);
+    if (this.options.depthMesh.enabled && this.depthMesh && viewId == 0) {
+      this.depthMesh.updateDepth(
+        depthData,
+        this.depthProjectionInverseMatrices[0]
+      );
+      this.depthMesh.position.copy(this.depthCameraPositions[0]);
+      this.depthMesh.quaternion.copy(this.depthCameraRotations[0]);
     }
   }
 
-  updateGPUDepthData(depthData: XRWebGLDepthInformation, view_id = 0) {
-    this.gpuDepthData[view_id] = depthData;
-    // Workaround for b/382679381.
-    this.rawValueToMeters = depthData.rawValueToMeters;
-    if (this.options.useFloat32) {
-      this.rawValueToMeters = 1.0;
-    }
+  updateGPUDepthData(depthData: XRWebGLDepthInformation, viewId = 0) {
+    this.gpuDepthData[viewId] = depthData;
+    this.updateDepthMatrices(depthData, viewId);
 
     // For now, assume that we need cpu depth only if depth mesh is enabled.
     // In the future, add a separate option.
@@ -208,15 +261,15 @@ export class Depth {
         ? this.depthMesh.convertGPUToGPU(depthData)
         : null;
     if (cpuDepth) {
-      if (this.depthArray[view_id] == null) {
-        this.depthArray[view_id] = this.options.useFloat32
+      if (this.depthArray[viewId] == null) {
+        this.depthArray[viewId] = this.options.useFloat32
           ? new Float32Array(cpuDepth.data)
           : new Uint16Array(cpuDepth.data);
         this.width = cpuDepth.width;
         this.height = cpuDepth.height;
       } else {
         // Copies the data from an ArrayBuffer to the existing TypedArray.
-        this.depthArray[view_id].set(
+        this.depthArray[viewId].set(
           this.options.useFloat32
             ? new Float32Array(cpuDepth.data)
             : new Uint16Array(cpuDepth.data)
@@ -226,21 +279,29 @@ export class Depth {
 
     // Updates Depth Texture.
     if (this.options.depthTexture.enabled && this.depthTextures) {
-      this.depthTextures.updateNativeTexture(depthData, this.renderer, view_id);
+      this.depthTextures.updateNativeTexture(depthData, this.renderer, viewId);
     }
 
-    if (this.options.depthMesh.enabled && this.depthMesh && view_id == 0) {
+    if (this.options.depthMesh.enabled && this.depthMesh && viewId == 0) {
       if (cpuDepth) {
-        this.depthMesh.updateDepth(cpuDepth);
+        this.depthMesh.updateDepth(
+          cpuDepth,
+          this.depthProjectionInverseMatrices[0]
+        );
       } else {
-        this.depthMesh.updateGPUDepth(depthData);
+        this.depthMesh.updateGPUDepth(
+          depthData,
+          this.depthProjectionInverseMatrices[0]
+        );
       }
+      this.depthMesh.position.copy(this.depthCameraPositions[0]);
+      this.depthMesh.quaternion.copy(this.depthCameraRotations[0]);
     }
   }
 
-  getTexture(view_id: number) {
+  getTexture(viewId: number) {
     if (!this.options.depthTexture.enabled) return undefined;
-    return this.depthTextures?.get(view_id);
+    return this.depthTextures?.get(viewId);
   }
 
   update(frame?: XRFrame) {
@@ -254,12 +315,6 @@ export class Depth {
   }
 
   updateLocalDepth(frame: XRFrame) {
-    const leftCamera = this.renderer.xr?.getCamera?.()?.cameras?.[0];
-    if (leftCamera && this.depthMesh && this.depthMesh.parent != leftCamera) {
-      leftCamera.add(this.depthMesh);
-      this.scene.add(leftCamera);
-    }
-
     const session = frame.session;
     const binding = this.renderer.xr.getBinding();
 
@@ -277,32 +332,26 @@ export class Depth {
       }
     }
 
-    if (this.xrRefSpace == null) {
-      session.requestReferenceSpace('local').then((refSpace) => {
-        this.xrRefSpace = refSpace;
-      });
-      session.addEventListener('end', () => {
-        this.xrRefSpace = undefined;
-      });
-    } else {
-      const pose = frame.getViewerPose(this.xrRefSpace);
+    const xrRefSpace = this.renderer.xr.getReferenceSpace();
+    if (xrRefSpace) {
+      const pose = frame.getViewerPose(xrRefSpace);
       if (pose) {
-        for (let view_id = 0; view_id < pose.views.length; ++view_id) {
-          const view = pose.views[view_id];
-          this.view[view_id] = view;
+        for (let viewId = 0; viewId < pose.views.length; ++viewId) {
+          const view = pose.views[viewId];
+          this.view[viewId] = view;
 
           if (session.depthUsage === 'gpu-optimized') {
             const depthData = binding.getDepthInformation(view);
             if (!depthData) {
               return;
             }
-            this.updateGPUDepthData(depthData, view_id);
+            this.updateGPUDepthData(depthData, viewId);
           } else {
             const depthData = frame.getDepthInformation(view);
             if (!depthData) {
               return;
             }
-            this.updateCPUDepthData(depthData, view_id);
+            this.updateCPUDepthData(depthData, viewId);
           }
         }
       } else {

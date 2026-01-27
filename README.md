@@ -3,6 +3,7 @@
 [![NPM Package](https://img.shields.io/npm/v/xrblocks)](https://www.npmjs.com/package/xrblocks)
 [![Build Size](https://badgen.net/bundlephobia/minzip/xrblocks)](https://bundlephobia.com/result?p=xrblocks)
 ![jsDelivr hits (GitHub)](https://img.shields.io/jsdelivr/gh/hw/google/xrblocks)
+[![arXiv](https://img.shields.io/badge/arXiv-2509.25504-b31b1b.svg)](https://arxiv.org/abs/2509.25504)
 
 #### JavaScript library for rapid XR and AI prototyping
 
@@ -74,8 +75,8 @@ code below:
     <script type="importmap">
       {
         "imports": {
-          "three": "https://cdn.jsdelivr.net/npm/three@0.181.0/build/three.module.js",
-          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.181.0/examples/jsm/",
+          "three": "https://cdn.jsdelivr.net/npm/three@0.182.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.182.0/examples/jsm/",
           "xrblocks": "https://cdn.jsdelivr.net/gh/google/xrblocks@build/xrblocks.js",
           "xrblocks/addons/": "https://cdn.jsdelivr.net/gh/google/xrblocks@build/addons/"
         }

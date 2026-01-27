@@ -1,3 +1,4 @@
+import {PermissionsManager} from './PermissionsManager';
 import {
   WebXRSessionEventType,
   WebXRSessionManager,
@@ -13,14 +14,24 @@ export class XRButton {
 
   constructor(
     private sessionManager: WebXRSessionManager,
+    private permissionsManager: PermissionsManager,
+    private appTitle = '',
+    private appDescription = '',
     private startText = 'ENTER XR',
     private endText = 'END XR',
     private invalidText = 'XR NOT SUPPORTED',
     private startSimulatorText = 'START SIMULATOR',
     showEnterSimulatorButton = false,
-    public startSimulator = () => {}
+    public startSimulator = () => {},
+    private permissions = {
+      geolocation: false,
+      camera: false,
+      microphone: false,
+    }
   ) {
     this.domElement.id = XRBUTTON_WRAPPER_ID;
+    this.createXRAppTitle();
+    this.createXRAppDescription();
     this.createXRButtonElement();
 
     if (showEnterSimulatorButton) {
@@ -54,6 +65,24 @@ export class XRButton {
     this.domElement.appendChild(this.simulatorButtonElement);
   }
 
+  private createXRAppTitle() {
+    if (!this.appTitle) {
+      return;
+    }
+    const appTitle = document.createElement('h1');
+    appTitle.textContent = this.appTitle;
+    this.domElement.appendChild(appTitle);
+  }
+
+  private createXRAppDescription() {
+    if (!this.appDescription) {
+      return;
+    }
+    const appDescription = document.createElement('h4');
+    appDescription.textContent = this.appDescription;
+    this.domElement.appendChild(appDescription);
+  }
+
   private createXRButtonElement() {
     this.xrButtonElement.classList.add(XRBUTTON_CLASS);
     this.xrButtonElement.disabled = true;
@@ -68,7 +97,16 @@ export class XRButton {
     button.disabled = false;
 
     button.onclick = () => {
-      this.sessionManager.startSession();
+      this.permissionsManager
+        .checkAndRequestPermissions(this.permissions)
+        .then((result) => {
+          if (result.granted) {
+            this.sessionManager.startSession();
+          } else {
+            this.xrButtonElement.textContent =
+              'Error:' + result.error + '\nPlease try again.';
+          }
+        });
     };
   }
 

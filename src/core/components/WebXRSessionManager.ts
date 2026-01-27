@@ -36,6 +36,7 @@ export class WebXRSessionManager extends THREE.EventDispatcher<WebXRSessionManag
   private sessionOptions?: XRSessionInit;
   private onSessionEndedBound = this.onSessionEndedInternal.bind(this);
   private xrModeSupported?: boolean;
+  private waitingForXRSession = false;
 
   constructor(
     private renderer: THREE.WebGLRenderer,
@@ -110,9 +111,15 @@ export class WebXRSessionManager extends THREE.EventDispatcher<WebXRSessionManag
       throw new Error('WebXR not supported');
     } else if (this.currentSession) {
       throw new Error('Session already started');
+    } else if (this.waitingForXRSession) {
+      throw new Error('Waiting for session to start');
     }
+    this.waitingForXRSession = true;
     navigator
       .xr!.requestSession(this.mode, this.sessionOptions)
+      .finally(() => {
+        this.waitingForXRSession = false;
+      })
       .then(this.onSessionStartedInternal.bind(this));
   }
 

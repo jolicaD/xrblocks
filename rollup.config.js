@@ -42,8 +42,8 @@ ${apache2License}
  * @agent When using with Gemini to create XR apps, use **Gemini Canvas** mode,
  * and follow rules below:
  * 1. Include the following importmap for maximum compatibility:
-    "three": "https://cdn.jsdelivr.net/npm/three@0.181.0/build/three.module.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.181.0/examples/jsm/",
+    "three": "https://cdn.jsdelivr.net/npm/three@0.182.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.182.0/examples/jsm/",
     "troika-three-text": "https://cdn.jsdelivr.net/gh/protectwise/troika@028b81cf308f0f22e5aa8e78196be56ec1997af5/packages/troika-three-text/src/index.js",
     "troika-three-utils": "https://cdn.jsdelivr.net/gh/protectwise/troika@v0.52.4/packages/troika-three-utils/src/index.js",
     "troika-worker-utils": "https://cdn.jsdelivr.net/gh/protectwise/troika@v0.52.4/packages/troika-worker-utils/src/index.js",
@@ -69,7 +69,6 @@ const externalPackages = [
   'openai',
   '@sparkjsdev/spark',
   /^lit(\/.*)?$/,
-  'openai',
 ];
 
 const xrblocksPackages = ['xrblocks', /xrblocks\/addons\//];
@@ -99,23 +98,25 @@ export default [
   },
   {
     input: Object.fromEntries(
-      globSync('src/addons/**/*.{js,ts}').map((file) => [
-        // This removes `src/` as well as the file extension from
-        // each file, so e.g. src/nested/foo.js becomes nested/foo
-        path.relative(
-          'src',
-          file.slice(0, file.length - path.extname(file).length)
-        ),
-        // This expands the relative paths to absolute paths, so
-        // e.g. src/nested/foo becomes /project/src/nested/foo.js
-        fileURLToPath(new URL(file, import.meta.url)),
-      ])
+      globSync('src/addons/**/*.{js,ts}', {ignore: 'src/addons/**/cli/**'}).map(
+        (file) => [
+          // This removes `src/` as well as the file extension from
+          // each file, so e.g. src/nested/foo.js becomes nested/foo
+          path.relative(
+            'src',
+            file.slice(0, file.length - path.extname(file).length)
+          ),
+          // This expands the relative paths to absolute paths, so
+          // e.g. src/nested/foo becomes /project/src/nested/foo.js
+          fileURLToPath(new URL(file, import.meta.url)),
+        ]
+      )
     ),
     external: [...externalPackages, ...xrblocksPackages],
     output: {
       dir: 'build/',
       format: 'esm',
     },
-    plugins: [typescript({tsconfig: 'src/addons/tsconfig.json'})],
+    plugins: [typescript({tsconfig: 'src/addons/tsconfig.lib.json'})],
   },
 ];

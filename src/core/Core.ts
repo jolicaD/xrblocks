@@ -23,6 +23,7 @@ import {traverseUtil} from '../utils/SceneGraphUtils';
 import {DragManager} from '../ux/DragManager';
 import {World} from '../world/World';
 import {WorldOptions} from '../world/WorldOptions';
+import {MeshDetectionOptions} from '../world/mesh/MeshDetectionOptions';
 
 import {Registry} from './components/Registry';
 import {ScreenshotSynthesizer} from './components/ScreenshotSynthesizer';
@@ -39,6 +40,7 @@ import {XRTransition} from './components/XRTransition';
 import {Options} from './Options';
 import {Script} from './Script';
 import {User} from './User';
+import {PermissionsManager} from './components/PermissionsManager';
 
 /**
  * Core is the central engine of the XR Blocks framework, acting as a
@@ -127,6 +129,7 @@ export class Core {
     camera: THREE.Camera
   ) => void;
   webXRSessionManager?: WebXRSessionManager;
+  permissionsManager = new PermissionsManager();
 
   /**
    * Core is a singleton manager that manages all XR "blocks".
@@ -163,6 +166,7 @@ export class Core {
     this.registry.register(this.simulator);
     this.registry.register(this.scriptsManager);
     this.registry.register(this.depth);
+    this.registry.register(this.world);
   }
 
   /**
@@ -179,6 +183,7 @@ export class Core {
     this.registry.register(options.depth, DepthOptions);
     this.registry.register(options.simulator, SimulatorOptions);
     this.registry.register(options.world, WorldOptions);
+    this.registry.register(options.world.meshes, MeshDetectionOptions);
     this.registry.register(options.ai, AIOptions);
     this.registry.register(options.sound, SoundOptions);
     this.registry.register(options.gestures, GestureRecognitionOptions);
@@ -257,6 +262,8 @@ export class Core {
         dataFormatPreference: [
           this.options.depth.useFloat32 ? 'float32' : 'luminance-alpha',
         ],
+        depthTypeRequest: options.depth.depthTypeRequest,
+        matchDepthView: options.depth.matchDepthView,
       };
       this.depth.init(
         this.camera,
@@ -277,6 +284,9 @@ export class Core {
     }
     if (options.world.planes.enabled) {
       webXRRequiredFeatures.push('plane-detection');
+    }
+    if (options.world.meshes.enabled) {
+      webXRRequiredFeatures.push('mesh-detection');
     }
 
     // Sets up lighting.
@@ -325,12 +335,16 @@ export class Core {
     if (!shouldAutostartSimulator && options.xrButton.enabled) {
       this.xrButton = new XRButton(
         this.webXRSessionManager,
+        this.permissionsManager,
+        options.xrButton?.appTitle,
+        options.xrButton?.appDescription,
         options.xrButton?.startText,
         options.xrButton?.endText,
         options.xrButton?.invalidText,
         options.xrButton?.startSimulatorText,
         options.xrButton?.showEnterSimulatorButton,
-        this.startSimulator.bind(this)
+        this.startSimulator.bind(this),
+        options.permissions
       );
       document.body.appendChild(this.xrButton.domElement);
     }
@@ -489,7 +503,6 @@ export class Core {
    * scripts.
    */
   private onXRSessionEnded() {
-    this.startSimulator();
     this.scriptsManager.onXRSessionEnded();
   }
 
