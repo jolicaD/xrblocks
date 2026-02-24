@@ -7,16 +7,19 @@ export class DetectedMesh extends THREE.Mesh {
   private collider?: RAPIER_NS.Collider;
   private blendedWorld?: RAPIER_NS.World;
   private lastChangedTime = 0;
+  semanticLabel?: string;
 
-  constructor(xrMesh: XRMesh, material: THREE.Material) {
+  constructor(mesh: XRMesh, material: THREE.Material) {
     const geometry = new THREE.BufferGeometry();
-    const vertices = new Float32Array(xrMesh.vertices);
-    const indices = new Uint32Array(xrMesh.indices);
-    geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-    geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+    geometry.setAttribute(
+      'position',
+      new THREE.BufferAttribute(mesh.vertices, 3)
+    );
+    geometry.setIndex(new THREE.BufferAttribute(mesh.indices, 1));
     geometry.computeVertexNormals();
     super(geometry, material);
-    this.lastChangedTime = xrMesh.lastChangedTime;
+    this.lastChangedTime = mesh.lastChangedTime;
+    this.semanticLabel = mesh.semanticLabel;
   }
 
   initRapierPhysics(RAPIER: typeof RAPIER_NS, blendedWorld: RAPIER_NS.World) {
@@ -36,17 +39,21 @@ export class DetectedMesh extends THREE.Mesh {
     if (mesh.lastChangedTime === this.lastChangedTime) return;
     this.lastChangedTime = mesh.lastChangedTime;
     const geometry = new THREE.BufferGeometry();
-    const vertices = new Float32Array(mesh.vertices);
-    const indices = new Uint32Array(mesh.indices);
-    geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-    geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+    geometry.setAttribute(
+      'position',
+      new THREE.BufferAttribute(mesh.vertices, 3)
+    );
+    geometry.setIndex(new THREE.BufferAttribute(mesh.indices, 1));
     geometry.computeVertexNormals();
     this.geometry.dispose();
     this.geometry = geometry;
     if (this.RAPIER && this.collider) {
       const RAPIER = this.RAPIER;
       this.blendedWorld!.removeCollider(this.collider, false);
-      const colliderDesc = RAPIER.ColliderDesc.trimesh(vertices, indices);
+      const colliderDesc = RAPIER.ColliderDesc.trimesh(
+        mesh.vertices,
+        mesh.indices
+      );
       this.collider = this.blendedWorld!.createCollider(
         colliderDesc,
         this.rigidBody

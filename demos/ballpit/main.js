@@ -11,14 +11,19 @@ const depthMeshColliderUpdateFps = xb.getUrlParamFloat(
 );
 
 const useSceneMesh = xb.getUrlParamBool('scenemesh', false);
+const sceneMeshDebug = xb.getUrlParamBool('scenemeshdebug', false);
 
 const options = new xb.Options();
 if (useSceneMesh) {
   options.world.enableMeshDetection();
+  options.world.meshes.showDebugVisualizations = sceneMeshDebug;
 } else {
   options.depth = new xb.DepthOptions(xb.xrDepthMeshPhysicsOptions);
   options.depth.depthMesh.colliderUpdateFps = depthMeshColliderUpdateFps;
+  options.depth.matchDepthView = false;
 }
+options.reticles.enabled = false;
+options.controllers.performRaycastOnUpdate = false;
 options.xrButton = {
   ...options.xrButton,
   startText: '<i id="xrlogo"></i> LET THE FUN BEGIN',

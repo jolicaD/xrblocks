@@ -5,6 +5,7 @@ import fs from 'fs';
 import {globSync} from 'glob';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {dts} from 'rollup-plugin-dts';
 
 // Read the version from package.json
 const packageJson = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
@@ -69,6 +70,7 @@ const externalPackages = [
   'openai',
   '@sparkjsdev/spark',
   /^lit(\/.*)?$/,
+  'rapier3d',
 ];
 
 const xrblocksPackages = ['xrblocks', /xrblocks\/addons\//];
@@ -83,7 +85,32 @@ export default [
       banner: bannerText,
       sourcemap: true,
     },
-    plugins: [typescript()],
+    plugins: [
+      typescript({
+        compilerOptions: {
+          composite: false,
+          declaration: false,
+        },
+      }),
+    ],
+  },
+  {
+    input: 'src/xrblocks.ts',
+    external: externalPackages,
+    output: {
+      file: 'build/xrblocks.d.ts',
+      format: 'esm',
+      banner: bannerText,
+    },
+    plugins: [
+      typescript({
+        compilerOptions: {
+          composite: false,
+          declaration: false,
+        },
+      }),
+      dts(),
+    ],
   },
   {
     input: 'src/xrblocks.ts',
@@ -93,7 +120,15 @@ export default [
       format: 'esm',
       sourcemap: true,
     },
-    plugins: [typescript(), terser()],
+    plugins: [
+      typescript({
+        compilerOptions: {
+          composite: false,
+          declaration: false,
+        },
+      }),
+      terser(),
+    ],
     watch: false, // Skip this rule when using watch.
   },
   {
@@ -117,6 +152,15 @@ export default [
       dir: 'build/',
       format: 'esm',
     },
-    plugins: [typescript({tsconfig: 'src/addons/tsconfig.lib.json'})],
+    plugins: [
+      typescript({
+        tsconfig: 'src/addons/tsconfig.lib.json',
+        exclude: ['src/!(addons)/**/*.ts', 'src/*.ts'],
+        compilerOptions: {
+          declaration: true,
+          declarationDir: 'build/addons/',
+        },
+      }),
+    ],
   },
 ];

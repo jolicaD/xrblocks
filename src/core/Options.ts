@@ -30,6 +30,8 @@ export class InputOptions {
   visualization = false;
   /** Whether to show the ray lines extending from the controllers. */
   visualizeRays = false;
+  /** Whether to perform raycast on update. This is needed for the reticle to work properly. */
+  performRaycastOnUpdate = true;
 }
 
 /**
@@ -255,6 +257,17 @@ export class Options {
    */
   enableXRTransitions() {
     this.transition.enabled = true;
+    return this;
+  }
+
+  /**
+   * Enables input from hands and controllers.
+   * Note that this is enabled by default and can also be changed at runtime with
+   * xb.core.input.enableControllers() and xb.core.input.disableControllers().
+   * @returns The instance for chaining.
+   */
+  enableControllers() {
+    this.controllers.enabled = true;
     return this;
   }
 
